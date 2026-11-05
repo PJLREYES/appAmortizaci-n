@@ -1,0 +1,32 @@
+# Amortizaciones PJLR
+
+Registro de bienes y cuadros de amortización. Es una aplicación HTML de un solo archivo, multiempresa.
+
+Versión actual: **Ver PJLR 2026.28**
+
+## Archivos
+
+| Archivo | Descripción |
+|---|---|
+| `Amortizaciones.html` | Aplicación (abrir en Google Chrome o Microsoft Edge) |
+| `index.html` | Copia idéntica de la aplicación, para publicarla en Netlify |
+| `Amortizaciones.ico` | Icono de la aplicación (16–256 px) |
+
+## Datos
+
+Los datos **no** están en este repositorio. Al elegir la carpeta del programa en
+⚙️ Configuración → 📁 Almacenamiento, se guardan en la subcarpeta `datos` del
+equipo: `config.json` y un archivo `empresa_….json` por empresa. Si no se elige
+carpeta, se quedan en el navegador.
+
+Las copias de seguridad (.zip) y los archivos `empresa_….json` de cualquier versión
+anterior se restauran desde ⚙️ Configuración → ♻️ Restaurar datos, que los adapta
+al formato actual.
+
+## Historial reciente
+
+- **2026.28**: se quita el botón de Configuración de la pestaña Informe anual.
+- **2026.27**: el menú de opciones del bien también se abre con el clic izquierdo.
+- **2026.26**: nueva pestaña «♻️ Restaurar datos» en Configuración.
+- **2026.25**: nueva pestaña principal «⚙️ Configuración».
+- **2026.24**: menú contextual (Cuadro, Editar, PDF, Imprimir, Ver factura, Eliminar); los datos pasan a la carpeta `datos`; adaptador de copias de versiones anteriores; corregida la exportación del informe a PDF.
