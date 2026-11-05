@@ -2,7 +2,7 @@
 <html lang="es" style="--bg: #fdf6e3; --card: #fffbf0; --text: #3b2f0e; --muted: #92826a; --line: #e8d9b8; --font-size-base: 13px;"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestión de Bienes y Amortizaciones · PJLR 2026.32 Multiempresa</title>
+<title>Gestión de Bienes y Amortizaciones · PJLR 2026.33 Multiempresa</title>
 <style>
   :root {
     --bg: #eef2f7;
@@ -507,10 +507,10 @@
       <button onclick="abrirTablaAmortizacion()" class="secondary no-print" style="display:flex;align-items:center;gap:5px;font-size:0.82rem;padding:5px 10px;border-radius:999px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e40af;font-weight:700;">
         ℹ️ Tablas AEAT
       </button>
-      <button onclick="copiaYCerrar()" title="Guarda una copia de seguridad en «Copias de seguridad» y cierra la aplicación" class="no-print" style="display:flex;align-items:center;gap:5px;font-size:0.82rem;padding:5px 10px;border-radius:999px;border:1px solid #fca5a5;background:#fff1f2;color:#b91c1c;font-weight:700;">
+      <button onclick="copiaYCerrar()" title="Si hay cambios desde la última copia, guarda una copia de seguridad en «Copias de seguridad»; después cierra la aplicación" class="no-print" style="display:flex;align-items:center;gap:5px;font-size:0.82rem;padding:5px 10px;border-radius:999px;border:1px solid #fca5a5;background:#fff1f2;color:#b91c1c;font-weight:700;">
         ✕ Cerrar
       </button>
-      <div class="version">Ver PJLR 2026.32</div>
+      <div class="version">Ver PJLR 2026.33</div>
     </div>
   </div>
 
@@ -2591,6 +2591,56 @@
   const MAX_COPIAS = 10;                                   // v2026.32: copias que se conservan
   const RX_COPIA_ZIP = /^bienes_amortizaciones_.+\.zip$/i;
 
+  // ── v2026.33 · Copia solo si hay cambios ──
+  // Huella (SHA-256) del contenido real de los datos: configuración de empresas y apariencia,
+  // y bienes/empresa/categorías de todas las empresas. No cuentan la pestaña abierta,
+  // los paneles, la empresa seleccionada ni la marca de hora de guardado.
+  const ARCHIVO_HUELLA = 'ultima_copia.json';
+  const LS_HUELLA = 'amort2::huellaUltimaCopia';
+
+  async function _huellaDatos() {
+    const cfg = JSON.parse(_jsonConfig());
+    delete cfg.activaId;
+    if (cfg.global) { delete cfg.global.tabActiva; delete cfg.global.paneles; }
+    const partes = [cfg];
+    const norm = (j) => ({ empresa: j.empresa || {}, categorias_custom: j.categorias_custom || [], bienes: j.bienes || [] });
+    for (const e of _cfg.empresas) {
+      let j = null;
+      if (e.id === _cfg.activaId) j = JSON.parse(_jsonEmpresaActiva());
+      else if (_dirHandle) {
+        try { j = JSON.parse(await (await (await _dirHandle.getFileHandle('empresa_' + e.id + '.json')).getFile()).text()); } catch (err) {}
+      } else {
+        try {
+          const d = JSON.parse(localStorage.getItem(LS_EMP + e.id) || 'null');
+          if (d) j = { empresa: JSON.parse(d.empresa || '{}'), categorias_custom: JSON.parse(d.categorias_custom || '[]'), bienes: JSON.parse(d.bienes || '[]') };
+        } catch (err) {}
+      }
+      partes.push({ id: e.id, datos: j ? norm(j) : null });
+    }
+    const texto = JSON.stringify(partes);
+    try {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (err) {
+      let h = 0; for (let i = 0; i < texto.length; i++) h = (h * 31 + texto.charCodeAt(i)) | 0;
+      return 'h' + h + '_' + texto.length;
+    }
+  }
+  async function _leerHuellaUltimaCopia(dirCopias) {
+    if (dirCopias) {
+      try { return JSON.parse(await (await (await dirCopias.getFileHandle(ARCHIVO_HUELLA)).getFile()).text()); } catch (err) {}
+    }
+    try { return JSON.parse(localStorage.getItem(LS_HUELLA) || 'null'); } catch (err) { return null; }
+  }
+  async function _guardarHuellaUltimaCopia(dirCopias, huella, nombre) {
+    const info = { huella, copia: nombre, fecha: new Date().toISOString(), version: APP_VERSION };
+    try { localStorage.setItem(LS_HUELLA, JSON.stringify(info)); } catch (err) {}
+    if (dirCopias) {
+      const fh = await dirCopias.getFileHandle(ARCHIVO_HUELLA, { create: true });
+      const w = await fh.createWritable(); await w.write(JSON.stringify(info, null, 2)); await w.close();
+    }
+  }
+
   // Conserva solo las MAX_COPIAS copias más recientes y borra las más antiguas.
   // Solo afecta a las copias ZIP generadas por la aplicación (bienes_amortizaciones_….zip).
   async function _rotarCopias(dirCopias) {
@@ -2636,16 +2686,27 @@
 
   async function copiaYCerrar() {
     const m = document.getElementById('modalCierreCopia'); if (m) m.style.display = 'none';
-    _avisoCierre('<div style="font-size:2rem;margin-bottom:6px;">💾</div><strong>Guardando copia de seguridad…</strong>');
+    _avisoCierre('<div style="font-size:2rem;margin-bottom:6px;">🔎</div><strong>Comprobando si hay cambios…</strong>');
     try {
       if (typeof guardarTodoAhora === 'function') await guardarTodoAhora();
+      const conCarpeta = !!(_rootHandle && _rootHandle !== _dirHandle);
+      const dirCopias = conCarpeta ? await _rootHandle.getDirectoryHandle(SUBCARPETA_COPIAS, { create: true }) : null;
+      const huella = await _huellaDatos();
+      const anterior = await _leerHuellaUltimaCopia(dirCopias);
+      if (anterior && anterior.huella === huella) {
+        const cuando = anterior.fecha ? new Date(anterior.fecha).toLocaleString('es-ES') : '';
+        _cerrarVentana('<div style="font-size:2rem;margin-bottom:6px;">✔️</div><strong>No hay cambios desde la última copia</strong>' +
+          '<div style="margin-top:6px;font-size:0.82rem;color:#64748b;">No se genera copia nueva' + (cuando ? ' · última copia: ' + _esc(cuando) : '') + '.</div>');
+        return;
+      }
+      _avisoCierre('<div style="font-size:2rem;margin-bottom:6px;">💾</div><strong>Hay cambios: guardando copia de seguridad…</strong>');
       const c = await crearCopiaZIP();
-      if (_rootHandle && _rootHandle !== _dirHandle) {
-        const dirCopias = await _rootHandle.getDirectoryHandle(SUBCARPETA_COPIAS, { create: true });
+      if (conCarpeta) {
         const fh = await dirCopias.getFileHandle(c.nombre, { create: true });
         const w = await fh.createWritable(); await w.write(c.blob); await w.close();
         const ok = (await fh.getFile()).size === c.blob.size;
         if (!ok) throw new Error('La copia guardada no coincide con la generada.');
+        try { await _guardarHuellaUltimaCopia(dirCopias, huella, c.nombre); } catch (e) { console.error('No se ha podido registrar la huella de la copia:', e); }
         let rot = { total: 0, borradas: [] };
         try { rot = await _rotarCopias(dirCopias); } catch (e) { console.error('Error al limpiar copias antiguas:', e); }
         _cerrarVentana('<div style="font-size:2rem;margin-bottom:6px;">✅</div><strong>Copia de seguridad guardada</strong><br>' +
@@ -2655,6 +2716,7 @@
       } else {
         // Sin carpeta del programa conectada: se descarga la copia
         descargarArchivo(c.blob, c.nombre);
+        try { await _guardarHuellaUltimaCopia(null, huella, c.nombre); } catch (e) {}
         _avisoCierre('<div style="font-size:2rem;margin-bottom:6px;">⚠️</div><strong>No hay carpeta del programa conectada.</strong><br>' +
           'La copia <em>' + _esc(c.nombre) + '</em> se ha descargado en la carpeta de Descargas.<br>' +
           '<span style="font-size:0.82rem;color:#64748b;">Para que se guarde automáticamente en «Copias de seguridad», conecta la carpeta del programa en Configuración → Almacenamiento.</span>',
@@ -2683,7 +2745,7 @@
   //  copias ZIP (cualquier versión), empresa_*.json de la carpeta «datos»
   //  y JSON exportados.
   // ═══════════════════════════════════════════════════════════════════════
-  const APP_VERSION = '2026.32';
+  const APP_VERSION = '2026.33';
 
   function _numES(v) {
     if (typeof v === 'number') return isFinite(v) ? v : 0;
@@ -4295,7 +4357,7 @@ function imprimirInforme() {
     + '<div class="sub">Generado: ' + hoy + (filtro ? ' | Bien: ' + filtro : ' | Todos los bienes') + '</div></div>'
     + (empCab ? '<div class="emp">' + empCab + '</div>' : '')
     + contenido
-    + '<div class="footer"><span>Informe: ' + labelPeriodo + '</span><span>Registro de Bienes y Amortizaciones - Ver PJLR 2026.32</span></div>'
+    + '<div class="footer"><span>Informe: ' + labelPeriodo + '</span><span>Registro de Bienes y Amortizaciones - Ver PJLR 2026.33</span></div>'
     + '<scr' + 'ipt>window.onload=function(){window.print();};<\/scr' + 'ipt>'
     + '</body></html>';
   var w = window.open('', '_blank', 'width=950,height=800');
