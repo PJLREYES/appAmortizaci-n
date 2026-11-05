@@ -2,7 +2,7 @@
 <html lang="es" style="--bg: #fdf6e3; --card: #fffbf0; --text: #3b2f0e; --muted: #92826a; --line: #e8d9b8; --font-size-base: 13px;"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestión de Bienes y Amortizaciones · PJLR 2026.31 Multiempresa</title>
+<title>Gestión de Bienes y Amortizaciones · PJLR 2026.32 Multiempresa</title>
 <style>
   :root {
     --bg: #eef2f7;
@@ -510,7 +510,7 @@
       <button onclick="copiaYCerrar()" title="Guarda una copia de seguridad en «Copias de seguridad» y cierra la aplicación" class="no-print" style="display:flex;align-items:center;gap:5px;font-size:0.82rem;padding:5px 10px;border-radius:999px;border:1px solid #fca5a5;background:#fff1f2;color:#b91c1c;font-weight:700;">
         ✕ Cerrar
       </button>
-      <div class="version">Ver PJLR 2026.31</div>
+      <div class="version">Ver PJLR 2026.32</div>
     </div>
   </div>
 
@@ -2588,6 +2588,25 @@
 
   // ── v2026.29 · Botón «Cerrar»: copia de seguridad en «Copias de seguridad» y cierre ──
   const SUBCARPETA_COPIAS = 'Copias de seguridad';
+  const MAX_COPIAS = 10;                                   // v2026.32: copias que se conservan
+  const RX_COPIA_ZIP = /^bienes_amortizaciones_.+\.zip$/i;
+
+  // Conserva solo las MAX_COPIAS copias más recientes y borra las más antiguas.
+  // Solo afecta a las copias ZIP generadas por la aplicación (bienes_amortizaciones_….zip).
+  async function _rotarCopias(dirCopias) {
+    const copias = [];
+    for await (const [nombre, h] of dirCopias.entries()) {
+      if (h.kind !== 'file' || !RX_COPIA_ZIP.test(nombre)) continue;
+      try { copias.push({ nombre, fecha: (await h.getFile()).lastModified }); } catch (e) {}
+    }
+    copias.sort((a, b) => b.fecha - a.fecha || b.nombre.localeCompare(a.nombre));
+    const sobran = copias.slice(MAX_COPIAS);
+    const borradas = [];
+    for (const c of sobran) {
+      try { await dirCopias.removeEntry(c.nombre); borradas.push(c.nombre); } catch (e) { console.error('No se ha podido borrar ' + c.nombre, e); }
+    }
+    return { total: Math.min(copias.length, MAX_COPIAS), borradas };
+  }
 
   function _avisoCierre(html, conBotones) {
     let ov = document.getElementById('overlayCierre');
@@ -2627,8 +2646,12 @@
         const w = await fh.createWritable(); await w.write(c.blob); await w.close();
         const ok = (await fh.getFile()).size === c.blob.size;
         if (!ok) throw new Error('La copia guardada no coincide con la generada.');
+        let rot = { total: 0, borradas: [] };
+        try { rot = await _rotarCopias(dirCopias); } catch (e) { console.error('Error al limpiar copias antiguas:', e); }
         _cerrarVentana('<div style="font-size:2rem;margin-bottom:6px;">✅</div><strong>Copia de seguridad guardada</strong><br>' +
-          _esc(_rootHandle.name + '\\' + SUBCARPETA_COPIAS + '\\' + c.nombre));
+          _esc(_rootHandle.name + '\\' + SUBCARPETA_COPIAS + '\\' + c.nombre) +
+          '<div style="margin-top:6px;font-size:0.82rem;color:#64748b;">Se conservan las ' + MAX_COPIAS + ' copias más recientes' +
+          (rot.borradas.length ? ' · eliminada' + (rot.borradas.length > 1 ? 's ' + rot.borradas.length + ' antiguas' : ' la más antigua') : '') + '.</div>');
       } else {
         // Sin carpeta del programa conectada: se descarga la copia
         descargarArchivo(c.blob, c.nombre);
@@ -2660,7 +2683,7 @@
   //  copias ZIP (cualquier versión), empresa_*.json de la carpeta «datos»
   //  y JSON exportados.
   // ═══════════════════════════════════════════════════════════════════════
-  const APP_VERSION = '2026.31';
+  const APP_VERSION = '2026.32';
 
   function _numES(v) {
     if (typeof v === 'number') return isFinite(v) ? v : 0;
@@ -4272,7 +4295,7 @@ function imprimirInforme() {
     + '<div class="sub">Generado: ' + hoy + (filtro ? ' | Bien: ' + filtro : ' | Todos los bienes') + '</div></div>'
     + (empCab ? '<div class="emp">' + empCab + '</div>' : '')
     + contenido
-    + '<div class="footer"><span>Informe: ' + labelPeriodo + '</span><span>Registro de Bienes y Amortizaciones - Ver PJLR 2026.31</span></div>'
+    + '<div class="footer"><span>Informe: ' + labelPeriodo + '</span><span>Registro de Bienes y Amortizaciones - Ver PJLR 2026.32</span></div>'
     + '<scr' + 'ipt>window.onload=function(){window.print();};<\/scr' + 'ipt>'
     + '</body></html>';
   var w = window.open('', '_blank', 'width=950,height=800');
