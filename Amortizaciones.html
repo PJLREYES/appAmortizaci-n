@@ -2,7 +2,7 @@
 <html lang="es" style="--bg: #fdf6e3; --card: #fffbf0; --text: #3b2f0e; --muted: #92826a; --line: #e8d9b8; --font-size-base: 13px;"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestión de Bienes y Amortizaciones · PJLR 2026.30 Multiempresa</title>
+<title>Gestión de Bienes y Amortizaciones · PJLR 2026.31 Multiempresa</title>
 <style>
   :root {
     --bg: #eef2f7;
@@ -510,7 +510,7 @@
       <button onclick="copiaYCerrar()" title="Guarda una copia de seguridad en «Copias de seguridad» y cierra la aplicación" class="no-print" style="display:flex;align-items:center;gap:5px;font-size:0.82rem;padding:5px 10px;border-radius:999px;border:1px solid #fca5a5;background:#fff1f2;color:#b91c1c;font-weight:700;">
         ✕ Cerrar
       </button>
-      <div class="version">Ver PJLR 2026.30</div>
+      <div class="version">Ver PJLR 2026.31</div>
     </div>
   </div>
 
@@ -807,7 +807,6 @@
           <div id="estadoCarpeta" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px;font-size:0.85rem;"></div>
           <div class="actions" style="margin-top:0;margin-bottom:6px;">
             <button class="primary" onclick="elegirCarpetaDatos()">📁 Elegir carpeta del programa...</button>
-            <button class="secondary" onclick="guardarProgramaEnCarpeta(true)">💾 Actualizar programa en la carpeta</button>
             <button class="secondary" onclick="desconectarCarpeta()">✕ Desconectar carpeta</button>
           </div>
           <p style="margin:0 0 14px;font-size:0.78rem;color:#94a3b8;line-height:1.5;">Elige la carpeta donde está el programa (p. ej. <strong>C:\appAmortizaciones</strong>). Cada cambio se guarda automáticamente en su subcarpeta <strong>«datos»</strong> (un archivo JSON por empresa + config.json); si había datos sueltos en la carpeta del programa, se trasladan solos a «datos». Requiere Google Chrome o Microsoft Edge (el navegador pide confirmar el acceso a la carpeta).</p>
@@ -1264,7 +1263,7 @@
     _errorSync = false;
     _cerrarOverlayReconexion();
     await guardarTodoAhora();               // escribe config.json + empresa activa
-    guardarProgramaEnCarpeta(false);        // actualiza la copia del programa
+    _borrarCopiaProgramaAntigua();          // v2026.31: ya no se guarda copia del programa
     actualizarChipCarpeta();
   }
 
@@ -1314,21 +1313,15 @@
     _msgAlmacen('Carpeta desconectada. Los datos ahora se guardan solo en este navegador.', true);
   }
 
-  async function guardarProgramaEnCarpeta(manual) {
-    if (!_dirHandle) {
-      if (manual) _msgAlmacen('Primero conecta una carpeta de datos.', false);
-      return;
-    }
-    try {
-      const codigo = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-      const destino = _rootHandle || _dirHandle;   // la copia del programa va en la carpeta del programa
-      const fhp = await destino.getFileHandle(NOMBRE_PROGRAMA, { create: true });
-      const wp = await fhp.createWritable(); await wp.write(codigo); await wp.close();
-      if (manual) _msgAlmacen('✔ Programa actualizado en la carpeta (' + NOMBRE_PROGRAMA + ').', true);
-    } catch (err) {
-      if (manual) _msgAlmacen('No se ha podido guardar el programa en la carpeta.', false);
+  // v2026.31: se elimina la copia automática del programa (amortizaciones_programa.html).
+  // Si quedó alguna de versiones anteriores en la carpeta del programa o en «datos», se borra.
+  async function _borrarCopiaProgramaAntigua() {
+    for (const dir of [_rootHandle, _dirHandle]) {
+      if (!dir) continue;
+      try { await dir.removeEntry(NOMBRE_PROGRAMA); console.info('Eliminada la copia antigua ' + NOMBRE_PROGRAMA); } catch (e) {}
     }
   }
+
 
   // ── Gestión de empresas ──
   function renderSelectorEmpresas() {
@@ -1468,7 +1461,7 @@
         est.innerHTML = '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:1.4rem;">📁</span><div>' +
           '<strong style="color:#166534;">Carpeta conectada:</strong> ' + _esc(_nombreCarpeta()) +
           ' <span style="margin-left:8px;">' + sync + '</span>' +
-          '<div style="color:#64748b;font-size:0.78rem;margin-top:2px;">Guardado automático en la subcarpeta «datos» · un archivo JSON por empresa + config.json · copia del programa en la carpeta principal' +
+          '<div style="color:#64748b;font-size:0.78rem;margin-top:2px;">Guardado automático en la subcarpeta «datos» · un archivo JSON por empresa + config.json' +
           (_ultimoGuardado ? ' · Último guardado: ' + _ultimoGuardado.toLocaleTimeString('es-ES') : '') + '</div></div></div>';
         est.style.borderColor = '#86efac'; est.style.background = '#f0fdf4';
       } else {
@@ -2667,7 +2660,7 @@
   //  copias ZIP (cualquier versión), empresa_*.json de la carpeta «datos»
   //  y JSON exportados.
   // ═══════════════════════════════════════════════════════════════════════
-  const APP_VERSION = '2026.30';
+  const APP_VERSION = '2026.31';
 
   function _numES(v) {
     if (typeof v === 'number') return isFinite(v) ? v : 0;
@@ -4279,7 +4272,7 @@ function imprimirInforme() {
     + '<div class="sub">Generado: ' + hoy + (filtro ? ' | Bien: ' + filtro : ' | Todos los bienes') + '</div></div>'
     + (empCab ? '<div class="emp">' + empCab + '</div>' : '')
     + contenido
-    + '<div class="footer"><span>Informe: ' + labelPeriodo + '</span><span>Registro de Bienes y Amortizaciones - Ver PJLR 2026.30</span></div>'
+    + '<div class="footer"><span>Informe: ' + labelPeriodo + '</span><span>Registro de Bienes y Amortizaciones - Ver PJLR 2026.31</span></div>'
     + '<scr' + 'ipt>window.onload=function(){window.print();};<\/scr' + 'ipt>'
     + '</body></html>';
   var w = window.open('', '_blank', 'width=950,height=800');
