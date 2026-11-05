@@ -2,7 +2,7 @@
 <html lang="es" style="--bg: #fdf6e3; --card: #fffbf0; --text: #3b2f0e; --muted: #92826a; --line: #e8d9b8; --font-size-base: 13px;"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestión de Bienes y Amortizaciones · PJLR 2026.28 Multiempresa</title>
+<title>Gestión de Bienes y Amortizaciones · PJLR 2026.29 Multiempresa</title>
 <style>
   :root {
     --bg: #eef2f7;
@@ -507,10 +507,10 @@
       <button onclick="abrirTablaAmortizacion()" class="secondary no-print" style="display:flex;align-items:center;gap:5px;font-size:0.82rem;padding:5px 10px;border-radius:999px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e40af;font-weight:700;">
         ℹ️ Tablas AEAT
       </button>
-      <button onclick="copiaYCerrar()" class="no-print" style="display:flex;align-items:center;gap:5px;font-size:0.82rem;padding:5px 10px;border-radius:999px;border:1px solid #fca5a5;background:#fff1f2;color:#b91c1c;font-weight:700;">
+      <button onclick="copiaYCerrar()" title="Guarda una copia de seguridad en «Copias de seguridad» y cierra la aplicación" class="no-print" style="display:flex;align-items:center;gap:5px;font-size:0.82rem;padding:5px 10px;border-radius:999px;border:1px solid #fca5a5;background:#fff1f2;color:#b91c1c;font-weight:700;">
         ✕ Cerrar
       </button>
-      <div class="version">Ver PJLR 2026.28</div>
+      <div class="version">Ver PJLR 2026.29</div>
     </div>
   </div>
 
@@ -2462,7 +2462,8 @@
     descargarArchivo(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), `amortizaciones_completas_${marcaTiempo()}.csv`);
   }
 
-  async function exportarZIP() {
+  // v2026.29: genera la copia ZIP (empresa activa + todos los archivos de «datos») y la devuelve
+  async function crearCopiaZIP() {
     const bienes = cargarBienes();
     const empresa = cargarEmpresa();
     const apariencia = cargarApariencia();
@@ -2487,9 +2488,92 @@
       }
     });
 
+    // Archivos de la carpeta «datos» (todas las empresas), si está conectada
+    if (_dirHandle) {
+      try {
+        for await (const [nombre, h] of _dirHandle.entries()) {
+          if (h.kind === 'file' && RX_ARCHIVO_DATOS.test(nombre)) {
+            zip.folder('datos').file(nombre, await (await h.getFile()).text());
+          }
+        }
+      } catch (err) { console.error('No se han podido añadir los archivos de «datos» a la copia:', err); }
+    }
+
     const contenido = await zip.generateAsync({ type: 'blob' });
     const slugEmp = (empresaActiva().nombre || 'empresa').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'empresa';
-    descargarArchivo(contenido, `bienes_amortizaciones_${slugEmp}_${marcaActual}.zip`);
+    return { blob: contenido, nombre: `bienes_amortizaciones_${slugEmp}_${marcaActual}.zip` };
+  }
+
+  async function exportarZIP() {
+    const c = await crearCopiaZIP();
+    descargarArchivo(c.blob, c.nombre);
+  }
+
+  // ── v2026.29 · Botón «Cerrar»: copia de seguridad en «Copias de seguridad» y cierre ──
+  const SUBCARPETA_COPIAS = 'Copias de seguridad';
+
+  function _avisoCierre(html, conBotones) {
+    let ov = document.getElementById('overlayCierre');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'overlayCierre';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.65);z-index:5000;display:flex;align-items:center;justify-content:center;';
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML = '<div style="background:#fff;border-radius:18px;padding:26px 28px;max-width:460px;width:94%;box-shadow:0 20px 60px rgba(15,23,42,0.3);text-align:center;font-size:0.92rem;color:#334155;line-height:1.55;">' +
+      html + (conBotones ? '<div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' + conBotones + '</div>' : '') + '</div>';
+  }
+  function _quitarAvisoCierre() { const ov = document.getElementById('overlayCierre'); if (ov) ov.remove(); }
+
+  function _cerrarVentana(mensaje) {
+    _avisoCierre(mensaje + '<div style="margin-top:10px;color:#64748b;">Cerrando la aplicación…</div>');
+    setTimeout(() => {
+      try { window.close(); } catch (e) {}
+      // Si el navegador no permite cerrar la pestaña desde la página, se indica al usuario
+      setTimeout(() => {
+        _avisoCierre(mensaje + '<div style="margin-top:12px;font-weight:700;color:#0f172a;">Ya puedes cerrar esta ventana.</div>' +
+          '<div style="margin-top:4px;font-size:0.8rem;color:#94a3b8;">El navegador no permite que la página se cierre sola cuando se abre como pestaña normal.</div>',
+          '<button class="secondary" onclick="_quitarAvisoCierre()">Seguir trabajando</button>');
+      }, 600);
+    }, 1200);
+  }
+
+  async function copiaYCerrar() {
+    const m = document.getElementById('modalCierreCopia'); if (m) m.style.display = 'none';
+    _avisoCierre('<div style="font-size:2rem;margin-bottom:6px;">💾</div><strong>Guardando copia de seguridad…</strong>');
+    try {
+      if (typeof guardarTodoAhora === 'function') await guardarTodoAhora();
+      const c = await crearCopiaZIP();
+      if (_rootHandle && _rootHandle !== _dirHandle) {
+        const dirCopias = await _rootHandle.getDirectoryHandle(SUBCARPETA_COPIAS, { create: true });
+        const fh = await dirCopias.getFileHandle(c.nombre, { create: true });
+        const w = await fh.createWritable(); await w.write(c.blob); await w.close();
+        const ok = (await fh.getFile()).size === c.blob.size;
+        if (!ok) throw new Error('La copia guardada no coincide con la generada.');
+        _cerrarVentana('<div style="font-size:2rem;margin-bottom:6px;">✅</div><strong>Copia de seguridad guardada</strong><br>' +
+          _esc(_rootHandle.name + '\\' + SUBCARPETA_COPIAS + '\\' + c.nombre));
+      } else {
+        // Sin carpeta del programa conectada: se descarga la copia
+        descargarArchivo(c.blob, c.nombre);
+        _avisoCierre('<div style="font-size:2rem;margin-bottom:6px;">⚠️</div><strong>No hay carpeta del programa conectada.</strong><br>' +
+          'La copia <em>' + _esc(c.nombre) + '</em> se ha descargado en la carpeta de Descargas.<br>' +
+          '<span style="font-size:0.82rem;color:#64748b;">Para que se guarde automáticamente en «Copias de seguridad», conecta la carpeta del programa en Configuración → Almacenamiento.</span>',
+          '<button class="secondary" onclick="_quitarAvisoCierre()">Seguir trabajando</button>' +
+          '<button class="danger" onclick="cerrarSinCopia()">Cerrar</button>');
+      }
+    } catch (err) {
+      console.error(err);
+      _avisoCierre('<div style="font-size:2rem;margin-bottom:6px;">❌</div><strong>No se ha podido guardar la copia de seguridad.</strong><br>' +
+        _esc(err && err.message ? err.message : String(err)),
+        '<button class="secondary" onclick="_quitarAvisoCierre()">Seguir trabajando</button>' +
+        '<button class="danger" onclick="cerrarSinCopia()">Cerrar sin copia</button>');
+    }
+  }
+
+  async function cerrarSinCopia() {
+    const m = document.getElementById('modalCierreCopia'); if (m) m.style.display = 'none';
+    try { if (typeof guardarTodoAhora === 'function') await guardarTodoAhora(); } catch (e) {}
+    _cerrarVentana('<strong>Datos guardados.</strong>');
   }
 
 
@@ -2499,7 +2583,7 @@
   //  copias ZIP (cualquier versión), empresa_*.json de la carpeta «datos»
   //  y JSON exportados.
   // ═══════════════════════════════════════════════════════════════════════
-  const APP_VERSION = '2026.28';
+  const APP_VERSION = '2026.29';
 
   function _numES(v) {
     if (typeof v === 'number') return isFinite(v) ? v : 0;
@@ -4111,7 +4195,7 @@ function imprimirInforme() {
     + '<div class="sub">Generado: ' + hoy + (filtro ? ' | Bien: ' + filtro : ' | Todos los bienes') + '</div></div>'
     + (empCab ? '<div class="emp">' + empCab + '</div>' : '')
     + contenido
-    + '<div class="footer"><span>Informe: ' + labelPeriodo + '</span><span>Registro de Bienes y Amortizaciones - Ver PJLR 2026.28</span></div>'
+    + '<div class="footer"><span>Informe: ' + labelPeriodo + '</span><span>Registro de Bienes y Amortizaciones - Ver PJLR 2026.29</span></div>'
     + '<scr' + 'ipt>window.onload=function(){window.print();};<\/scr' + 'ipt>'
     + '</body></html>';
   var w = window.open('', '_blank', 'width=950,height=800');

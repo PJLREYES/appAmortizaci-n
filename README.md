@@ -2,7 +2,7 @@
 
 Registro de bienes y cuadros de amortización. Es una aplicación HTML de un solo archivo, multiempresa.
 
-Versión actual: **Ver PJLR 2026.28**
+Versión actual: **Ver PJLR 2026.29**
 
 ## Archivos
 
@@ -33,6 +33,7 @@ El desinstalador nunca borra datos. Más información en `instalador/LEEME.txt`.
 
 ## Historial reciente
 
+- **2026.29**: el botón «✕ Cerrar» guarda una copia de seguridad ZIP en la subcarpeta «Copias de seguridad» de la carpeta del programa (incluye los archivos de «datos» de todas las empresas) y cierra la aplicación.
 - **2026.28**: se quita el botón de Configuración de la pestaña Informe anual.
 - **2026.27**: el menú de opciones del bien también se abre con el clic izquierdo.
 - **2026.26**: nueva pestaña «♻️ Restaurar datos» en Configuración.
