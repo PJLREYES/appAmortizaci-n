@@ -11,6 +11,7 @@ Versión actual: **Ver PJLR 2026.28**
 | `Amortizaciones.html` | Aplicación (abrir en Google Chrome o Microsoft Edge) |
 | `index.html` | Copia idéntica de la aplicación, para publicarla en Netlify |
 | `Amortizaciones.ico` | Icono de la aplicación (16–256 px) |
+| `instalador/` | Instalador para Windows (`Instalar_Amortizaciones_PJLR.exe`), su código NSIS y LEEME |
 
 ## Datos
 
@@ -22,6 +23,13 @@ carpeta, se quedan en el navegador.
 Las copias de seguridad (.zip) y los archivos `empresa_….json` de cualquier versión
 anterior se restauran desde ⚙️ Configuración → ♻️ Restaurar datos, que los adapta
 al formato actual.
+
+## Instalador
+
+`instalador/Instalar_Amortizaciones_PJLR.exe` no copia el HTML: crea accesos directos que abren
+https://amortizaciones-pjlr.netlify.app en una ventana propia de Edge o Chrome, con su icono. También
+crea `C:\appAmortizaciones` con sus carpetas `datos`, `Copias de seguridad` y `Versiones anteriores`.
+El desinstalador nunca borra datos. Más información en `instalador/LEEME.txt`.
 
 ## Historial reciente
 

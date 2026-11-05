@@ -1,0 +1,38 @@
+AMORTIZACIONES PJLR - INSTALADOR
+================================
+
+Instalar_Amortizaciones_PJLR.exe
+  Ejecutable de instalación para Windows. No copia el programa HTML: los accesos
+  directos abren la aplicación publicada en
+
+      https://amortizaciones-pjlr.netlify.app
+
+  en una ventana propia de Microsoft Edge o Google Chrome (modo aplicación, sin
+  barra de direcciones), por lo que siempre se usa la última versión publicada.
+
+Qué hace al ejecutarlo
+  - Crea la carpeta del programa (por defecto C:\appAmortizaciones) y sus
+    subcarpetas: datos, Copias de seguridad y Versiones anteriores.
+    Si ya existen, no modifica ni borra nada.
+  - Copia el icono Amortizaciones.ico.
+  - Crea los accesos directos «Amortizaciones PJLR» en el Escritorio, en el menú
+    Inicio (junto con «Carpeta de datos» y «Desinstalar») y en la propia carpeta.
+  - Registra la aplicación en Configuración de Windows > Aplicaciones instaladas,
+    desde donde se puede desinstalar.
+  - No necesita permisos de administrador.
+
+Primer uso
+  Configuración > Almacenamiento > «Elegir carpeta del programa» y seleccionar
+  C:\appAmortizaciones. Los datos se guardarán en C:\appAmortizaciones\datos.
+  Para recuperar copias anteriores: Configuración > Restaurar datos.
+
+Desinstalar
+  Quita los accesos directos y el registro. NUNCA borra los datos ni las copias
+  de seguridad (las carpetas solo se eliminan si están vacías).
+
+Aviso de Windows
+  Al no estar firmado digitalmente, Windows SmartScreen puede mostrar
+  «Windows protegió su PC». Pulsar «Más información» > «Ejecutar de todas formas».
+
+Instalador.nsi
+  Código fuente del instalador (NSIS 3). Para recompilarlo: makensis Instalador.nsi
