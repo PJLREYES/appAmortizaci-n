@@ -2,7 +2,7 @@
 <html lang="es" style="--bg: #fdf6e3; --card: #fffbf0; --text: #3b2f0e; --muted: #92826a; --line: #e8d9b8; --font-size-base: 13px;"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestión de Bienes y Amortizaciones · PJLR 2026.29 Multiempresa</title>
+<title>Gestión de Bienes y Amortizaciones · PJLR 2026.30 Multiempresa</title>
 <style>
   :root {
     --bg: #eef2f7;
@@ -503,14 +503,14 @@
         <select id="selectorEmpresa" onchange="cambiarEmpresa(this.value)" title="Cambiar de empresa" style="width:auto;min-width:140px;max-width:250px;border:none;background:transparent;font-weight:700;font-size:0.85rem;padding:4px 2px;color:var(--text);"></select>
         <button onclick="nuevaEmpresa()" title="Añadir nueva empresa" style="width:26px;height:26px;border-radius:50%;background:var(--primary);color:#fff;font-size:1rem;padding:0;display:flex;align-items:center;justify-content:center;">＋</button>
       </div>
-      <button id="chipCarpeta" onclick="abrirConfigAlmacen()" class="no-print" style="display: flex; align-items: center; gap: 5px; font-size: 0.82rem; padding: 5px 10px; border-radius: 999px; border: 1px solid rgb(134, 239, 172); background: rgb(240, 253, 244); color: rgb(22, 101, 52); font-weight: 700;" title="Todos los cambios están guardados en la carpeta «appAmortizaciones» (último guardado: 17:49:07). Clic para gestionar."><span class="dot-sync" style="background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,0.18);"></span> 📁 appAmortizaciones · <strong>Sincronizado</strong> <span style="font-weight:400;opacity:.7;">17:49:07</span></button>
+      <button id="chipCarpeta" onclick="clicIndicadorCarpeta()" class="no-print" style="display: flex; align-items: center; gap: 5px; font-size: 0.82rem; padding: 5px 10px; border-radius: 999px; border: 1px solid rgb(134, 239, 172); background: rgb(240, 253, 244); color: rgb(22, 101, 52); font-weight: 700;"><span class="dot-sync" style="background:#94a3b8;"></span> Comprobando carpeta…</button>
       <button onclick="abrirTablaAmortizacion()" class="secondary no-print" style="display:flex;align-items:center;gap:5px;font-size:0.82rem;padding:5px 10px;border-radius:999px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e40af;font-weight:700;">
         ℹ️ Tablas AEAT
       </button>
       <button onclick="copiaYCerrar()" title="Guarda una copia de seguridad en «Copias de seguridad» y cierra la aplicación" class="no-print" style="display:flex;align-items:center;gap:5px;font-size:0.82rem;padding:5px 10px;border-radius:999px;border:1px solid #fca5a5;background:#fff1f2;color:#b91c1c;font-weight:700;">
         ✕ Cerrar
       </button>
-      <div class="version">Ver PJLR 2026.29</div>
+      <div class="version">Ver PJLR 2026.30</div>
     </div>
   </div>
 
@@ -1260,6 +1260,9 @@
       }
     }
     try { await _idbSet('dirHandle', handle); } catch (err) {}
+    _handleGuardado = handle;
+    _errorSync = false;
+    _cerrarOverlayReconexion();
     await guardarTodoAhora();               // escribe config.json + empresa activa
     guardarProgramaEnCarpeta(false);        // actualiza la copia del programa
     actualizarChipCarpeta();
@@ -1300,6 +1303,7 @@
     await guardarTodoAhora();
     _dirHandle = null;
     _rootHandle = null;
+    _handleGuardado = null;
     try { await _idbDel('dirHandle'); } catch (err) {}
     try {
       localStorage.setItem(LS_CONFIG, _jsonConfig());
@@ -1423,22 +1427,27 @@
         chip.style.borderColor = '#fca5a5'; chip.style.background = '#fef2f2'; chip.style.color = '#b91c1c';
         chip.title = 'No se ha podido escribir en la carpeta «' + _nombreCarpeta() + '». Comprueba la unidad y vuelve a conectar la carpeta.';
       } else if (hayGuardadoPendiente()) {
-        // ÁMBAR parpadeante: guardando cambios
-        chip.innerHTML = '<span class="dot-sync" style="background:#f59e0b;animation:pulsoSync 0.9s ease-in-out infinite;"></span> 📁 ' + nombre + ' · Guardando…';
-        chip.style.borderColor = '#fcd34d'; chip.style.background = '#fffbeb'; chip.style.color = '#92400e';
+        // VERDE parpadeante: conectada, guardando cambios
+        chip.innerHTML = '<span class="dot-sync" style="background:#16a34a;animation:pulsoSync 0.9s ease-in-out infinite;"></span> 📁 ' + nombre + ' · Guardando…';
+        chip.style.borderColor = '#86efac'; chip.style.background = '#f0fdf4'; chip.style.color = '#166534';
         chip.title = 'Guardando cambios en la carpeta «' + _nombreCarpeta() + '»…';
       } else {
         // VERDE: todo sincronizado con la carpeta
-        chip.innerHTML = '<span class="dot-sync" style="background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,0.18);"></span> 📁 ' + nombre + ' · <strong>Sincronizado</strong>' +
+        chip.innerHTML = '<span class="dot-sync" style="background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,0.18);"></span> 📁 ' + nombre + ' · <strong>Conectada</strong>' +
           (_ultimoGuardado ? ' <span style="font-weight:400;opacity:.7;">' + _ultimoGuardado.toLocaleTimeString('es-ES') + '</span>' : '');
         chip.style.borderColor = '#86efac'; chip.style.background = '#f0fdf4'; chip.style.color = '#166534';
         chip.title = 'Todos los cambios están guardados en la carpeta «' + _nombreCarpeta() + '»' +
           (_ultimoGuardado ? ' (último guardado: ' + _ultimoGuardado.toLocaleTimeString('es-ES') + ')' : '') + '. Clic para gestionar.';
       }
     } else {
-      chip.innerHTML = '<span class="dot-sync" style="background:#94a3b8;"></span> 💾 Solo navegador';
-      chip.style.borderColor = '#fcd34d'; chip.style.background = '#fffbeb'; chip.style.color = '#92400e';
-      chip.title = 'Los datos se guardan solo en este navegador. Haz clic para elegir una carpeta de datos.';
+      // ROJO: sin conexión con la carpeta
+      const recordada = _handleGuardado || _handlePendiente;
+      chip.innerHTML = '<span class="dot-sync" style="background:#dc2626;box-shadow:0 0 0 3px rgba(220,38,38,0.18);animation:pulsoSync 1.6s ease-in-out infinite;"></span> ' +
+        (recordada ? '📁 ' + _esc(_textoCarpeta(recordada)) + ' · <strong>Desconectada</strong> · Conectar' : '<strong>Sin carpeta</strong> · Conectar');
+      chip.style.borderColor = '#fca5a5'; chip.style.background = '#fef2f2'; chip.style.color = '#b91c1c';
+      chip.title = recordada
+        ? 'La carpeta «' + _textoCarpeta(recordada) + '» no está conectada: los cambios solo se guardan en este navegador. Haz clic para conectarla.'
+        : 'No hay carpeta de datos: los cambios solo se guardan en este navegador. Haz clic para elegir la carpeta del programa.';
     }
   }
 
@@ -1495,68 +1504,143 @@
   }
 
   // ── Reconexión de la carpeta al abrir la aplicación ──
-  function _mostrarOverlayReconexion(handle) {
-    _handlePendiente = handle;
+  // ═══ v2026.30 · Conexión automática con la carpeta al iniciar ═══
+  //  · Si el navegador conserva el permiso → se conecta sola.
+  //  · Si pide confirmación → ventana con un solo clic (el navegador lo exige).
+  //    Al confirmar, Chrome/Edge ofrecen «Permitir en cada visita»: eligiéndolo,
+  //    las siguientes veces se conecta sin preguntar.
+  //  · Si no hay carpeta guardada, o ya no se encuentra → se pide elegirla.
+  let _handleGuardado = null;      // carpeta recordada (aunque esté desconectada)
+
+  function _textoCarpeta(handle) {
+    if (!handle) return '';
+    return String(handle.name).toLowerCase() === 'datos' ? handle.name : handle.name + '\\datos';
+  }
+
+  function _mostrarOverlayReconexion(handle, modo) {
+    modo = modo || 'permiso';
+    _handlePendiente = handle || null;
+    const prev = document.getElementById('overlayReconexion'); if (prev) prev.remove();
     const div = document.createElement('div');
     div.id = 'overlayReconexion';
     div.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.72);z-index:6000;display:flex;align-items:center;justify-content:center;';
-    div.innerHTML = '<div style="background:#fff;border-radius:18px;padding:30px;max-width:470px;width:94%;box-shadow:0 20px 60px rgba(15,23,42,0.3);text-align:center;">' +
-      '<div style="font-size:2.2rem;margin-bottom:10px;">📁</div>' +
-      '<h3 style="margin:0 0 8px;font-size:1.15rem;color:#0f172a;">Conectar carpeta de datos</h3>' +
-      '<p style="margin:0 0 20px;font-size:0.9rem;color:#475569;line-height:1.55;">Tus datos están guardados en la carpeta <strong>«' + _esc(handle.name) + (String(handle.name).toLowerCase() === 'datos' ? '' : '\\datos') + '»</strong>.<br>Por seguridad, el navegador pide confirmación cada vez que se abre la aplicación.</p>' +
-      '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
-      '<button class="primary" style="min-width:200px;" onclick="_reconectarCarpeta()">🔓 Conectar y cargar datos</button>' +
+    let titulo, texto, botones;
+    if (modo === 'permiso') {
+      titulo = 'Conectar con la carpeta de datos';
+      texto = 'Tus datos están en la carpeta <strong>«' + _esc(_textoCarpeta(handle)) + '»</strong>.<br>' +
+        'El navegador necesita tu confirmación para acceder a ella.' +
+        '<div style="margin-top:12px;padding:10px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:10px;font-size:0.82rem;color:#166534;text-align:left;">' +
+        '💡 En el aviso del navegador elige <strong>«Permitir en cada visita»</strong> y la próxima vez se conectará automáticamente, sin preguntar.</div>';
+      botones = '<button class="primary" style="min-width:220px;" onclick="_reconectarCarpeta()">🔓 Conectar y cargar datos</button>' +
+        '<button class="secondary" onclick="elegirCarpetaDatos()">📁 Elegir otra carpeta</button>';
+    } else if (modo === 'perdida') {
+      titulo = 'No se encuentra la carpeta de datos';
+      texto = 'No se puede acceder a la carpeta <strong>«' + _esc(_textoCarpeta(handle)) + '»</strong>: puede haberse movido, renombrado o estar en una unidad desconectada.<br>Elige la carpeta del programa para conectarla de nuevo.';
+      botones = '<button class="primary" style="min-width:220px;" onclick="elegirCarpetaDatos()">📁 Elegir carpeta del programa</button>' +
+        (handle ? '<button class="secondary" onclick="_reconectarCarpeta()">🔄 Reintentar</button>' : '');
+    } else {
+      titulo = 'Elige la carpeta del programa';
+      texto = 'Para guardar los datos en el disco, elige la carpeta del programa (por ejemplo <strong>C:\\appAmortizaciones</strong>).<br>Los datos se guardarán en su subcarpeta «datos» y las copias en «Copias de seguridad».';
+      botones = '<button class="primary" style="min-width:220px;" onclick="elegirCarpetaDatos()">📁 Elegir carpeta del programa</button>';
+    }
+    div.innerHTML = '<div style="background:#fff;border-radius:18px;padding:30px;max-width:490px;width:94%;box-shadow:0 20px 60px rgba(15,23,42,0.3);text-align:center;">' +
+      '<div style="font-size:2.2rem;margin-bottom:10px;">' + (modo === 'perdida' ? '⚠️' : '📁') + '</div>' +
+      '<h3 style="margin:0 0 8px;font-size:1.15rem;color:#0f172a;">' + titulo + '</h3>' +
+      '<div style="margin:0 0 20px;font-size:0.9rem;color:#475569;line-height:1.55;">' + texto + '</div>' +
+      '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' + botones +
       '<button class="secondary" onclick="_continuarSinCarpeta()">Continuar sin carpeta</button>' +
       '</div></div>';
     document.body.appendChild(div);
+    actualizarChipCarpeta();
   }
+  function _cerrarOverlayReconexion() {
+    const ov = document.getElementById('overlayReconexion');
+    if (ov) ov.remove();
+  }
+
   async function _reconectarCarpeta() {
-    const handle = _handlePendiente;
-    if (!handle) return;
+    const handle = _handlePendiente || _handleGuardado;
+    if (!handle) { elegirCarpetaDatos(); return; }
     try {
-      const perm = await handle.requestPermission({ mode: 'readwrite' });
+      let perm = 'prompt';
+      try { perm = await handle.queryPermission({ mode: 'readwrite' }); } catch (e) {}
+      if (perm !== 'granted') perm = await handle.requestPermission({ mode: 'readwrite' });
       if (perm !== 'granted') {
-        alert('Permiso denegado. Se continuará con los datos guardados en el navegador.');
-        _continuarSinCarpeta();
+        _mostrarOverlayReconexion(handle, 'permiso');
         return;
       }
       await _conectarCarpeta(handle, true);
-      const ov = document.getElementById('overlayReconexion');
-      if (ov) ov.remove();
+      _cerrarOverlayReconexion();
       _handlePendiente = null;
+      _errorSync = false;
       inicializarUI();
+      actualizarChipCarpeta();
     } catch (err) {
       console.error(err);
-      alert('No se ha podido acceder a la carpeta (¿unidad desconectada?).\nSe continuará con los datos guardados en el navegador.');
-      _continuarSinCarpeta();
+      _dirHandle = null; _rootHandle = null;
+      _mostrarOverlayReconexion(handle, 'perdida');
     }
   }
   function _continuarSinCarpeta() {
-    const ov = document.getElementById('overlayReconexion');
-    if (ov) ov.remove();
+    _cerrarOverlayReconexion();
     _handlePendiente = null;
     actualizarChipCarpeta();
   }
 
+  // Indicador: clic → conectar si está desconectada; si está conectada, abre Almacenamiento
+  function clicIndicadorCarpeta() {
+    if (_dirHandle && !_errorSync) { abrirConfigAlmacen(); return; }
+    if (_handleGuardado || _handlePendiente) { _reconectarCarpeta(); return; }
+    elegirCarpetaDatos();
+  }
+
+  // Vigilancia: si se pierde el acceso (unidad desconectada, permiso retirado) el indicador pasa a rojo
+  async function _comprobarConexionCarpeta() {
+    if (!_dirHandle) return;
+    let ok = true;
+    try {
+      const perm = await _dirHandle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') ok = false;
+      else await _dirHandle.getFileHandle('config.json', { create: false });
+    } catch (err) { ok = false; }
+    if (!ok) {
+      _handleGuardado = _rootHandle || _dirHandle;
+      _dirHandle = null; _rootHandle = null;
+      actualizarChipCarpeta();
+    }
+  }
+  setInterval(_comprobarConexionCarpeta, 20000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) _comprobarConexionCarpeta(); });
+
   // ── Arranque de la aplicación ──
   async function bootApp() {
     _cargarFallback();
-    if (FS_SOPORTADO) {
-      let handle = null;
-      try { handle = await _idbGet('dirHandle'); } catch (err) {}
-      if (handle) {
-        let perm = 'denied';
-        try { perm = await handle.queryPermission({ mode: 'readwrite' }); } catch (err) {}
-        if (perm === 'granted') {
-          try { await _conectarCarpeta(handle, true); } catch (err) { console.error(err); }
-        } else if (perm === 'prompt') {
-          inicializarUI();
-          _mostrarOverlayReconexion(handle);
-          return;
-        }
+    if (!FS_SOPORTADO) { inicializarUI(); return; }
+    let handle = null;
+    try { handle = await _idbGet('dirHandle'); } catch (err) {}
+    _handleGuardado = handle;
+    if (!handle) {
+      inicializarUI();
+      _mostrarOverlayReconexion(null, 'nueva');
+      return;
+    }
+    let perm = 'prompt';
+    try { perm = await handle.queryPermission({ mode: 'readwrite' }); } catch (err) {}
+    if (perm === 'granted') {
+      try {
+        await _conectarCarpeta(handle, true);
+        inicializarUI();
+        return;
+      } catch (err) {
+        console.error('No se ha podido conectar con la carpeta guardada:', err);
+        _dirHandle = null; _rootHandle = null;
+        inicializarUI();
+        _mostrarOverlayReconexion(handle, 'perdida');
+        return;
       }
     }
     inicializarUI();
+    _mostrarOverlayReconexion(handle, 'permiso');
   }
 
   // Estilos del indicador de sincronización
@@ -2583,7 +2667,7 @@
   //  copias ZIP (cualquier versión), empresa_*.json de la carpeta «datos»
   //  y JSON exportados.
   // ═══════════════════════════════════════════════════════════════════════
-  const APP_VERSION = '2026.29';
+  const APP_VERSION = '2026.30';
 
   function _numES(v) {
     if (typeof v === 'number') return isFinite(v) ? v : 0;
@@ -4195,7 +4279,7 @@ function imprimirInforme() {
     + '<div class="sub">Generado: ' + hoy + (filtro ? ' | Bien: ' + filtro : ' | Todos los bienes') + '</div></div>'
     + (empCab ? '<div class="emp">' + empCab + '</div>' : '')
     + contenido
-    + '<div class="footer"><span>Informe: ' + labelPeriodo + '</span><span>Registro de Bienes y Amortizaciones - Ver PJLR 2026.29</span></div>'
+    + '<div class="footer"><span>Informe: ' + labelPeriodo + '</span><span>Registro de Bienes y Amortizaciones - Ver PJLR 2026.30</span></div>'
     + '<scr' + 'ipt>window.onload=function(){window.print();};<\/scr' + 'ipt>'
     + '</body></html>';
   var w = window.open('', '_blank', 'width=950,height=800');
