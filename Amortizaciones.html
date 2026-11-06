@@ -2,7 +2,7 @@
 <html lang="es" style="--bg: #fdf6e3; --card: #fffbf0; --text: #3b2f0e; --muted: #92826a; --line: #e8d9b8; --font-size-base: 13px;"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestión de Bienes y Amortizaciones · PJLR 2026.33 Multiempresa</title>
+<title>Gestión de Bienes y Amortizaciones · PJLR 2026.34 Multiempresa</title>
 <style>
   :root {
     --bg: #eef2f7;
@@ -510,7 +510,7 @@
       <button onclick="copiaYCerrar()" title="Si hay cambios desde la última copia, guarda una copia de seguridad en «Copias de seguridad»; después cierra la aplicación" class="no-print" style="display:flex;align-items:center;gap:5px;font-size:0.82rem;padding:5px 10px;border-radius:999px;border:1px solid #fca5a5;background:#fff1f2;color:#b91c1c;font-weight:700;">
         ✕ Cerrar
       </button>
-      <div class="version">Ver PJLR 2026.33</div>
+      <div class="version">Ver PJLR 2026.34</div>
     </div>
   </div>
 
@@ -622,6 +622,9 @@
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="info no-print" onclick="abrirInformes()" style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
             📋 Informes
+          </button>
+          <button class="no-print" onclick="abrirAsientos()" title="Asientos contables de la cuota de amortización (mensual, trimestral, semestral o anual)" style="display:flex;align-items:center;gap:6px;flex-shrink:0;background:#b45309;color:#fff;">
+            📒 Asientos contables
           </button>
         </div>
       </div>
@@ -2745,7 +2748,7 @@
   //  copias ZIP (cualquier versión), empresa_*.json de la carpeta «datos»
   //  y JSON exportados.
   // ═══════════════════════════════════════════════════════════════════════
-  const APP_VERSION = '2026.33';
+  const APP_VERSION = '2026.34';
 
   function _numES(v) {
     if (typeof v === 'number') return isFinite(v) ? v : 0;
@@ -3744,6 +3747,8 @@
       email:     document.getElementById('empEmail').value.trim(),
       web:       document.getElementById('empWeb').value.trim(),
     };
+    const prev = cargarEmpresa();
+    if (prev.cuentasContables) datos.cuentasContables = prev.cuentasContables;   // v2026.34
     guardarEmpresa(datos);
     actualizarNombreEmpresaCabecera();
     const msg = document.getElementById('empMsg');
@@ -3755,7 +3760,9 @@
   }
 
   function borrarDatosEmpresa() {
+    const prevCtas = cargarEmpresa().cuentasContables;   // v2026.34: las cuentas contables no se borran
     almacen.removeItem(EMPRESA_KEY);
+    if (prevCtas) guardarEmpresa({ cuentasContables: prevCtas });
     cargarFormEmpresa();
     const msg = document.getElementById('empMsg');
     msg.style.display = 'block';
@@ -4357,7 +4364,7 @@ function imprimirInforme() {
     + '<div class="sub">Generado: ' + hoy + (filtro ? ' | Bien: ' + filtro : ' | Todos los bienes') + '</div></div>'
     + (empCab ? '<div class="emp">' + empCab + '</div>' : '')
     + contenido
-    + '<div class="footer"><span>Informe: ' + labelPeriodo + '</span><span>Registro de Bienes y Amortizaciones - Ver PJLR 2026.33</span></div>'
+    + '<div class="footer"><span>Informe: ' + labelPeriodo + '</span><span>Registro de Bienes y Amortizaciones - Ver PJLR ' + APP_VERSION + '</span></div>'
     + '<scr' + 'ipt>window.onload=function(){window.print();};<\/scr' + 'ipt>'
     + '</body></html>';
   var w = window.open('', '_blank', 'width=950,height=800');
@@ -4443,6 +4450,452 @@ function exportarInformePDF() {
   doc.save('informe_amortizaciones_' + labelPeriodo.replace(/[^A-Za-z0-9]+/g,'_') + '_' + marcaTiempo() + '.pdf');
 }
 </script>
+<!-- v2026.34 · Modal Asientos contables de amortización -->
+<div id="modalAsientos" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);z-index:4000;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 10px;">
+  <div style="background:#fff;border-radius:18px;width:100%;max-width:980px;box-shadow:0 20px 60px rgba(15,23,42,0.25);margin:auto;">
+    <div style="background:#b45309;border-radius:18px 18px 0 0;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="color:#fef3c7;font-size:0.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;">Gestión de Amortizaciones</div>
+        <div style="color:#fff;font-size:1.1rem;font-weight:700;">📒 Asientos contables de la cuota de amortización</div>
+      </div>
+      <button onclick="cerrarAsientos()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:1.3rem;border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;">X</button>
+    </div>
+    <div style="padding:12px 18px;background:#fffbeb;border-bottom:1px solid #fde68a;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label class="as-lbl">Periodo</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button id="btnAsMensual" class="as-per" onclick="selPeriodoAsientos('mensual')">Mensual</button>
+          <button id="btnAsTrimestral" class="as-per" onclick="selPeriodoAsientos('trimestral')">Trimestral</button>
+          <button id="btnAsSemestral" class="as-per" onclick="selPeriodoAsientos('semestral')">Semestral</button>
+          <button id="btnAsAnual" class="as-per" onclick="selPeriodoAsientos('anual')">Anual</button>
+        </div>
+      </div>
+      <div id="asSelMes" style="display:flex;flex-direction:column;gap:4px;">
+        <label class="as-lbl">Mes</label>
+        <select id="asMes" class="as-sel" onchange="generarAsientos()">
+          <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+          <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+          <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+          <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+        </select>
+      </div>
+      <div id="asSelTrim" style="display:none;flex-direction:column;gap:4px;">
+        <label class="as-lbl">Trimestre</label>
+        <select id="asTrim" class="as-sel" onchange="generarAsientos()">
+          <option value="1">1.º (Ene-Mar)</option><option value="2">2.º (Abr-Jun)</option>
+          <option value="3">3.º (Jul-Sep)</option><option value="4">4.º (Oct-Dic)</option>
+        </select>
+      </div>
+      <div id="asSelSem" style="display:none;flex-direction:column;gap:4px;">
+        <label class="as-lbl">Semestre</label>
+        <select id="asSem" class="as-sel" onchange="generarAsientos()">
+          <option value="1">1.er semestre (Ene-Jun)</option><option value="2">2.º semestre (Jul-Dic)</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label class="as-lbl">Año</label>
+        <select id="asAnio" class="as-sel" onchange="generarAsientos()"></select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label class="as-lbl">Bienes</label>
+        <select id="asBien" class="as-sel" style="min-width:150px;" onchange="generarAsientos()"><option value="">Todos los bienes</option></select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label class="as-lbl">Agrupación</label>
+        <select id="asAgrup" class="as-sel" onchange="generarAsientos()">
+          <option value="cierre">Un asiento por cada cierre</option>
+          <option value="unico">Un asiento único del periodo</option>
+          <option value="bien">Un asiento por bien</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label class="as-lbl">Dígitos cuenta</label>
+        <select id="asDigitos" class="as-sel" onchange="generarAsientos()">
+          <option value="0">Tal cual (3-4)</option><option value="8">8 dígitos</option><option value="10">10 dígitos</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label class="as-lbl">N.º 1.er asiento</label>
+        <input id="asNumIni" type="number" min="1" step="1" value="1" class="as-sel" style="width:80px;" oninput="generarAsientos()">
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:#78350f;font-weight:600;margin:0 0 6px;">
+        <input id="asDesglose" type="checkbox" onchange="generarAsientos()" style="width:auto;"> Desglosar por bien
+      </label>
+      <div style="display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;">
+        <button onclick="toggleCuentasAsientos()" style="padding:6px 12px;border-radius:7px;border:1px solid #d97706;background:#fff;color:#92400e;font-size:0.82rem;font-weight:700;cursor:pointer;">⚙️ Cuentas</button>
+        <button onclick="imprimirAsientos()" style="padding:6px 12px;border-radius:7px;border:none;background:#059669;color:#fff;font-size:0.82rem;font-weight:700;cursor:pointer;">🖨️ Imprimir</button>
+        <button onclick="exportarAsientosPDF()" style="padding:6px 12px;border-radius:7px;border:none;background:#7c3aed;color:#fff;font-size:0.82rem;font-weight:700;cursor:pointer;">PDF</button>
+        <button onclick="exportarAsientosCSV()" style="padding:6px 12px;border-radius:7px;border:none;background:#0f766e;color:#fff;font-size:0.82rem;font-weight:700;cursor:pointer;">CSV</button>
+      </div>
+    </div>
+    <div id="asPanelCuentas" style="display:none;padding:12px 18px;background:#fff7ed;border-bottom:1px solid #fed7aa;"></div>
+    <div id="contenidoAsientos" style="padding:16px 18px;max-height:58vh;overflow-y:auto;"></div>
+  </div>
+</div>
+<style>
+  .as-lbl{font-size:0.78rem;font-weight:700;color:#92400e;margin:0;}
+  .as-sel{padding:6px 8px;border-radius:7px;border:1px solid #fcd34d;font-size:0.85rem;background:#fff;width:auto;}
+  .as-per{transition:none !important;padding:6px 12px;border-radius:7px;border:2px solid #e2e8f0;background:#fff;color:#475569;font-size:0.82rem;font-weight:700;cursor:pointer;}
+  .as-per.on{background:#b45309 !important;color:#fff !important;border-color:#b45309 !important;}
+  .as-tab{width:100%;border-collapse:collapse;font-size:0.8rem;margin-bottom:14px;}
+  .as-tab th{padding:6px 8px;background:#b45309 !important;color:#fff !important;border:1px solid #92400e;position:static;font-weight:700;text-align:center;}
+  .as-tab td{padding:5px 8px;border:1px solid #e2e8f0;text-align:left;}
+  .as-tab tr.as-cab td{background:#fef3c7;color:#78350f;font-weight:700;}
+  .as-tab tr.as-tot td{background:#fffbeb;font-weight:700;color:#92400e;}
+  .as-tab td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .as-tab td.cta{font-family:Consolas,monospace;font-weight:700;white-space:nowrap;}
+</style>
+
+<script>
+// ═══════════════════ v2026.34 · ASIENTOS CONTABLES DE AMORTIZACIÓN ═══════════════════
+// Configuración contable separada para poder actualizarla fácilmente.
+var CONFIG_PGC = {
+  vigencia: 'Plan General de Contabilidad, RD 1514/2007 (texto vigente a 06/11/2026). PGC PYMES (RD 1515/2007) usa las mismas cuentas.',
+  cuentas: {
+    '680':  'Amortización del inmovilizado intangible',
+    '681':  'Amortización del inmovilizado material',
+    '682':  'Amortización de las inversiones inmobiliarias',
+    '280':  'Amortización acumulada del inmovilizado intangible',
+    '2800': 'Amort. acum. de investigación',
+    '2801': 'Amort. acum. de desarrollo',
+    '2802': 'Amort. acum. de concesiones administrativas',
+    '2803': 'Amort. acum. de propiedad industrial',
+    '2805': 'Amort. acum. de derechos de traspaso',
+    '2806': 'Amort. acum. de aplicaciones informáticas',
+    '281':  'Amortización acumulada del inmovilizado material',
+    '2811': 'Amort. acum. de construcciones',
+    '2812': 'Amort. acum. de instalaciones técnicas',
+    '2813': 'Amort. acum. de maquinaria',
+    '2814': 'Amort. acum. de utillaje',
+    '2815': 'Amort. acum. de otras instalaciones',
+    '2816': 'Amort. acum. de mobiliario',
+    '2817': 'Amort. acum. de equipos para procesos de información',
+    '2818': 'Amort. acum. de elementos de transporte',
+    '2819': 'Amort. acum. de otro inmovilizado material',
+    '282':  'Amortización acumulada de las inversiones inmobiliarias'
+  },
+  // Categoría de la app → [cuenta de gasto (Debe), cuenta de amortización acumulada (Haber)]
+  mapeoCategorias: {
+    'Inmuebles':           ['681', '2811'],
+    'Maquinaria':          ['681', '2813'],
+    'Otras Instalaciones': ['681', '2815'],
+    'Mobiliario':          ['681', '2816'],
+    'Informática':         ['681', '2817'],
+    'Vehículos':           ['681', '2818'],
+    'Intangibles':         ['680', '280'],
+    'Otro':                ['681', '2819']
+  },
+  porDefecto: ['681', '2819']
+};
+
+var _periodoAsientos = 'mensual';
+
+function _cuentasEmpresa() {
+  var e = cargarEmpresa();
+  return (e && e.cuentasContables && typeof e.cuentasContables === 'object') ? e.cuentasContables : {};
+}
+function _cuentasCategoria(cat) {
+  var p = _cuentasEmpresa()[cat];
+  if (p && p.gasto && p.acum) return [String(p.gasto), String(p.acum)];
+  return (CONFIG_PGC.mapeoCategorias[cat] || CONFIG_PGC.porDefecto).slice();
+}
+function _nombreCuenta(c) {
+  c = String(c || '').replace(/\D/g, '');
+  for (var l = c.length; l >= 3; l--) { var n = CONFIG_PGC.cuentas[c.slice(0, l)]; if (n) return n; }
+  return '';
+}
+function _fmtCuenta(c) {
+  var d = parseInt(document.getElementById('asDigitos').value, 10) || 0;
+  c = String(c || '');
+  var pt = c.indexOf('.');
+  if (pt >= 0) {   // convención «2817.1»: el punto se rellena con ceros hasta los dígitos elegidos
+    var a = c.slice(0, pt), b = c.slice(pt + 1).replace(/\D/g, '');
+    if (!d) return a + b;
+    var ceros = d - a.length - b.length;
+    return a + (ceros > 0 ? '0000000000'.slice(0, ceros) : '') + b;
+  }
+  return (d && c.length < d) ? (c + '0000000000').slice(0, d) : c;
+}
+function _r2(x) { return Math.round((Number(x) || 0) * 100) / 100; }
+function _imp(x) { return (Math.abs(x) < 0.005) ? '' : formatoMoneda(x); }
+
+function abrirAsientos() {
+  var bienes = cargarBienes();
+  var anios = {};
+  bienes.forEach(function (b) { calcularFilasCuadro(b).forEach(function (f) { var y = f.fecha.split('/')[2]; if (y) anios[y] = true; }); });
+  var lista = Object.keys(anios).sort();
+  if (!lista.length) lista = [String(new Date().getFullYear())];
+  var sel = document.getElementById('asAnio');
+  sel.innerHTML = lista.map(function (a) { return '<option value="' + a + '">' + a + '</option>'; }).join('');
+  var hoy = new Date();
+  if (anios[String(hoy.getFullYear())]) sel.value = String(hoy.getFullYear());
+  document.getElementById('asMes').value = String(hoy.getMonth() + 1);
+  document.getElementById('asTrim').value = String(Math.floor(hoy.getMonth() / 3) + 1);
+  document.getElementById('asSem').value = hoy.getMonth() < 6 ? '1' : '2';
+  var sb = document.getElementById('asBien');
+  sb.innerHTML = '<option value="">Todos los bienes</option>' + bienes.map(function (b) {
+    return '<option value="' + _esc(b.codigo) + '">' + _esc(b.codigo + ' - ' + b.nombre) + '</option>';
+  }).join('');
+  document.getElementById('asPanelCuentas').style.display = 'none';
+  document.getElementById('modalAsientos').style.display = 'flex';
+  selPeriodoAsientos(_periodoAsientos);
+}
+function cerrarAsientos() { document.getElementById('modalAsientos').style.display = 'none'; }
+document.getElementById('modalAsientos').addEventListener('click', function (e) { if (e.target === this) cerrarAsientos(); });
+
+function selPeriodoAsientos(tipo) {
+  _periodoAsientos = tipo;
+  ['mensual', 'trimestral', 'semestral', 'anual'].forEach(function (k) {
+    document.getElementById('btnAs' + k.charAt(0).toUpperCase() + k.slice(1)).classList.toggle('on', k === tipo);
+  });
+  document.getElementById('asSelMes').style.display  = tipo === 'mensual'    ? 'flex' : 'none';
+  document.getElementById('asSelTrim').style.display = tipo === 'trimestral' ? 'flex' : 'none';
+  document.getElementById('asSelSem').style.display  = tipo === 'semestral'  ? 'flex' : 'none';
+  generarAsientos();
+}
+
+// Devuelve { label, desde, hasta (meses 1-12), anio, fechaFin dd/mm/aaaa }
+function _periodoAsientoSel() {
+  var tipo = _periodoAsientos, anio = parseInt(document.getElementById('asAnio').value, 10);
+  var MESES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  var d = 1, h = 12, label = 'Ejercicio ' + anio;
+  if (tipo === 'mensual')    { d = h = parseInt(document.getElementById('asMes').value, 10); label = MESES[d] + ' ' + anio; }
+  if (tipo === 'trimestral') { var t = parseInt(document.getElementById('asTrim').value, 10); d = (t - 1) * 3 + 1; h = t * 3; label = t + '.º trimestre ' + anio; }
+  if (tipo === 'semestral')  { var s = parseInt(document.getElementById('asSem').value, 10); d = s === 1 ? 1 : 7; h = s === 1 ? 6 : 12; label = (s === 1 ? '1.er' : '2.º') + ' semestre ' + anio; }
+  var fin = ultimoDiaMes(anio, h - 1);
+  return { tipo: tipo, label: label, desde: d, hasta: h, anio: anio, fechaFin: fin.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) };
+}
+
+function _fechaDDMM(f) { var p = f.split('/'); return ('0' + p[0]).slice(-2) + '/' + ('0' + p[1]).slice(-2) + '/' + p[2]; }
+
+// Cuotas del periodo: [{fecha, clave orden, bien, cat, gasto, acum, importe}]
+function _cuotasPeriodo(per) {
+  var filtro = document.getElementById('asBien').value;
+  var bienes = cargarBienes();
+  if (filtro) bienes = bienes.filter(function (b) { return b.codigo === filtro; });
+  var cuotas = [];
+  bienes.forEach(function (b) {
+    var ctas = _cuentasCategoria(b.categoria);
+    calcularFilasCuadro(b).forEach(function (f) {
+      var p = f.fecha.split('/'), m = parseInt(p[1], 10), a = parseInt(p[2], 10);
+      if (a !== per.anio || m < per.desde || m > per.hasta) return;
+      var imp = _r2(f.amort);
+      if (imp <= 0) return;
+      cuotas.push({ fecha: _fechaDDMM(f.fecha), orden: a * 10000 + m * 100 + parseInt(p[0], 10),
+        codigo: b.codigo, nombre: b.nombre, cat: b.categoria, gasto: ctas[0], acum: ctas[1], importe: imp,
+        nota: f.parcial ? ' (prorrata)' : (f.cuadre ? ' (cuadre)' : '') });
+    });
+  });
+  cuotas.sort(function (x, y) { return x.orden - y.orden || String(x.codigo).localeCompare(String(y.codigo)); });
+  return cuotas;
+}
+
+// Construye la lista de asientos con sus apuntes (Debe/Haber cuadrados)
+function _construirAsientos() {
+  var per = _periodoAsientoSel();
+  var agrup = document.getElementById('asAgrup').value;
+  var desglose = document.getElementById('asDesglose').checked;
+  var num = Math.max(1, parseInt(document.getElementById('asNumIni').value, 10) || 1);
+  var cuotas = _cuotasPeriodo(per);
+  var grupos = [], idx = {};
+  cuotas.forEach(function (c) {
+    var k = agrup === 'unico' ? 'U' : agrup === 'bien' ? 'B' + c.codigo : 'F' + c.fecha;
+    if (!(k in idx)) { idx[k] = grupos.length; grupos.push({ cuotas: [], fecha: agrup === 'unico' ? per.fechaFin : c.fecha }); }
+    var g = grupos[idx[k]];
+    g.cuotas.push(c);
+    if (agrup === 'bien' && c.orden > (g.ord || 0)) { g.ord = c.orden; g.fecha = c.fecha; }  // fecha del último cierre del bien
+  });
+  var asientos = grupos.map(function (g) {
+    var debe = {}, haber = {}, ordenD = [], ordenH = [];
+    g.cuotas.forEach(function (c) {
+      if (!(c.gasto in debe)) { debe[c.gasto] = 0; ordenD.push(c.gasto); }
+      debe[c.gasto] = _r2(debe[c.gasto] + c.importe);
+      var kh = (desglose || agrup === 'bien') ? c.acum + '|' + c.codigo : c.acum;
+      if (!(kh in haber)) { haber[kh] = { cta: c.acum, imp: 0, concepto: (desglose || agrup === 'bien') ? c.codigo + ' ' + c.nombre + c.nota : '' }; ordenH.push(kh); }
+      haber[kh].imp = _r2(haber[kh].imp + c.importe);
+    });
+    var concepto = 'Amortización ' + per.label + (agrup === 'bien' ? ' · ' + g.cuotas[0].codigo + ' ' + g.cuotas[0].nombre : (agrup === 'cierre' && per.tipo !== 'mensual' ? ' · cierre ' + g.fecha : ''));
+    var lineas = [];
+    ordenD.sort().forEach(function (c) { lineas.push({ cta: c, desc: _nombreCuenta(c), concepto: concepto, debe: debe[c], haber: 0 }); });
+    ordenH.sort().forEach(function (k) { var h = haber[k]; lineas.push({ cta: h.cta, desc: _nombreCuenta(h.cta), concepto: h.concepto || concepto, debe: 0, haber: h.imp }); });
+    var td = 0, th = 0; lineas.forEach(function (l) { td = _r2(td + l.debe); th = _r2(th + l.haber); });
+    return { num: num++, fecha: g.fecha, concepto: concepto, lineas: lineas, debe: td, haber: th };
+  });
+  var tD = 0, tH = 0; asientos.forEach(function (a) { tD = _r2(tD + a.debe); tH = _r2(tH + a.haber); });
+  return { per: per, asientos: asientos, totalDebe: tD, totalHaber: tH, nCuotas: cuotas.length };
+}
+
+function _htmlAsientos(r) {
+  var emp = cargarEmpresa();
+  var h = '';
+  if (emp.nombre) h += '<div style="margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #fde68a;"><div style="font-size:0.85rem;color:#92400e;font-weight:700;">' + _esc(emp.nombre) + (emp.cif ? ' · ' + _esc(emp.cif) : '') + '</div>'
+    + (emp.direccion ? '<div style="font-size:0.75rem;color:#64748b;">' + _esc(emp.direccion) + (emp.localidad ? ' · ' + _esc(emp.localidad) : '') + '</div>' : '') + '</div>';
+  h += '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:10px;">'
+    + '<div><div style="font-size:1rem;font-weight:700;color:#92400e;">Libro Diario · Asientos de amortización · ' + _esc(r.per.label) + '</div>'
+    + '<div style="font-size:0.75rem;color:#64748b;">Generado: ' + new Date().toLocaleDateString('es-ES') + ' · ' + r.asientos.length + ' asiento(s) · ' + r.nCuotas + ' cuota(s)</div></div>'
+    + '<div style="font-size:1.05rem;font-weight:700;color:#b45309;">Total: ' + formatoMoneda(r.totalDebe) + '</div></div>';
+  if (!r.asientos.length) return h + '<div style="text-align:center;padding:30px;color:#94a3b8;">No hay cuotas de amortización con vencimiento en este periodo.</div>' + _notaAsientos();
+  h += '<table class="as-tab"><thead><tr><th style="width:52px;">Asiento</th><th style="width:84px;">Fecha</th><th style="width:92px;">Cuenta</th><th style="text-align:left;">Descripción / Concepto</th><th style="width:110px;">Debe</th><th style="width:110px;">Haber</th></tr></thead><tbody>';
+  r.asientos.forEach(function (a) {
+    h += '<tr class="as-cab"><td style="text-align:center;">' + a.num + '</td><td style="text-align:center;">' + a.fecha + '</td><td colspan="4">' + _esc(a.concepto) + '</td></tr>';
+    a.lineas.forEach(function (l) {
+      var esH = l.haber > 0;
+      h += '<tr><td></td><td></td><td class="cta"' + (esH ? ' style="padding-left:22px;"' : '') + '>' + _esc(_fmtCuenta(l.cta)) + '</td>'
+        + '<td>' + (esH ? 'a ' : '') + _esc(l.desc || '(cuenta sin descripción)') + (l.concepto !== a.concepto ? '<div style="font-size:0.72rem;color:#64748b;">' + _esc(l.concepto) + '</div>' : '') + '</td>'
+        + '<td class="num">' + _imp(l.debe) + '</td><td class="num">' + _imp(l.haber) + '</td></tr>';
+    });
+    h += '<tr class="as-tot"><td colspan="4" style="text-align:right;">Suma asiento ' + a.num + (a.debe === a.haber ? ' ✔' : ' ⚠ DESCUADRE') + '</td><td class="num">' + formatoMoneda(a.debe) + '</td><td class="num">' + formatoMoneda(a.haber) + '</td></tr>';
+  });
+  h += '<tr class="as-tot"><td colspan="4" style="text-align:right;background:#fde68a;">TOTAL DEL PERIODO</td><td class="num" style="background:#fde68a;">' + formatoMoneda(r.totalDebe) + '</td><td class="num" style="background:#fde68a;">' + formatoMoneda(r.totalHaber) + '</td></tr></tbody></table>';
+  // Resumen por cuenta
+  var res = {};
+  r.asientos.forEach(function (a) { a.lineas.forEach(function (l) { if (!res[l.cta]) res[l.cta] = { d: 0, h: 0 }; res[l.cta].d = _r2(res[l.cta].d + l.debe); res[l.cta].h = _r2(res[l.cta].h + l.haber); }); });
+  h += '<div style="font-size:0.8rem;font-weight:700;color:#92400e;margin:4px 0;">Resumen por cuenta</div><table class="as-tab" style="max-width:640px;"><thead><tr><th>Cuenta</th><th style="text-align:left;">Descripción</th><th>Debe</th><th>Haber</th></tr></thead><tbody>';
+  Object.keys(res).sort().forEach(function (c) { h += '<tr><td class="cta">' + _esc(_fmtCuenta(c)) + '</td><td>' + _esc(_nombreCuenta(c)) + '</td><td class="num">' + _imp(res[c].d) + '</td><td class="num">' + _imp(res[c].h) + '</td></tr>'; });
+  h += '</tbody></table>';
+  return h + _notaAsientos();
+}
+function _notaAsientos() {
+  return '<div style="font-size:0.72rem;color:#64748b;line-height:1.5;border-top:1px dashed #e2e8f0;padding-top:6px;">'
+    + 'Se recogen las cuotas cuyo cierre, según el cuadro de cada bien, cae dentro del periodo (frecuencia mensual: fin de mes; trimestral: fin de trimestre; anual: 31/12). '
+    + 'Por eso un bien con amortización anual solo aparece en el periodo que incluye diciembre. Cuentas según ' + _esc(CONFIG_PGC.vigencia) + '</div>';
+}
+
+function generarAsientos() {
+  if (document.getElementById('modalAsientos').style.display === 'none') return;
+  document.getElementById('contenidoAsientos').innerHTML = _htmlAsientos(_construirAsientos());
+}
+
+// ── Cuentas por categoría (se guardan dentro de los datos de la empresa activa) ──
+function toggleCuentasAsientos() {
+  var p = document.getElementById('asPanelCuentas');
+  if (p.style.display !== 'none') { p.style.display = 'none'; return; }
+  var cats = obtenerTodasCategorias();
+  cargarBienes().forEach(function (b) { if (b.categoria && cats.indexOf(b.categoria) < 0) cats.push(b.categoria); });
+  var h = '<div style="font-size:0.82rem;font-weight:700;color:#92400e;margin-bottom:6px;">Cuentas contables por categoría <span style="font-weight:400;color:#64748b;">(solo para esta empresa)</span></div>'
+    + '<table class="as-tab" style="margin-bottom:8px;"><thead><tr><th style="text-align:left;">Categoría</th><th>Gasto (Debe)</th><th>Amort. acumulada (Haber)</th><th style="text-align:left;">Descripción</th></tr></thead><tbody>';
+  cats.forEach(function (c, i) {
+    var cc = _cuentasCategoria(c);
+    h += '<tr><td>' + _esc(c) + '</td>'
+      + '<td style="text-align:center;"><input id="asCtaG' + i + '" data-cat="' + _esc(c) + '" value="' + _esc(cc[0]) + '" style="width:90px;padding:4px 6px;font-family:Consolas,monospace;" oninput="this.closest(\'tr\').cells[3].textContent=_nombreCuenta(this.value)+\' / \'+_nombreCuenta(document.getElementById(\'asCtaH' + i + '\').value)"></td>'
+      + '<td style="text-align:center;"><input id="asCtaH' + i + '" value="' + _esc(cc[1]) + '" style="width:90px;padding:4px 6px;font-family:Consolas,monospace;" oninput="this.closest(\'tr\').cells[3].textContent=_nombreCuenta(document.getElementById(\'asCtaG' + i + '\').value)+\' / \'+_nombreCuenta(this.value)"></td>'
+      + '<td style="font-size:0.75rem;color:#475569;">' + _esc(_nombreCuenta(cc[0]) + ' / ' + _nombreCuenta(cc[1])) + '</td></tr>';
+  });
+  h += '</tbody></table><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+    + '<button onclick="guardarCuentasAsientos(' + cats.length + ')" style="padding:6px 12px;border-radius:7px;border:none;background:#b45309;color:#fff;font-size:0.82rem;font-weight:700;cursor:pointer;">Guardar cuentas</button>'
+    + '<button onclick="restablecerCuentasAsientos()" style="padding:6px 12px;border-radius:7px;border:1px solid #cbd5e1;background:#fff;color:#475569;font-size:0.82rem;font-weight:700;cursor:pointer;">Restablecer PGC</button>'
+    + '<span style="font-size:0.72rem;color:#64748b;">680 (intangible), 681 (material), 682 (inv. inmobiliarias) contra 280x / 281x / 282. Subcuenta con punto: «2817.1» → 28170001 con 8 dígitos.</span></div>';
+  p.innerHTML = h;
+  p.style.display = 'block';
+}
+function guardarCuentasAsientos(n) {
+  var map = {};
+  for (var i = 0; i < n; i++) {
+    var g = document.getElementById('asCtaG' + i), hh = document.getElementById('asCtaH' + i);
+    var limpia = function (v) { v = v.replace(/[^\d.]/g, ''); var i = v.indexOf('.'); return i < 0 ? v : v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, ''); };
+    var vg = limpia(g.value), vh = limpia(hh.value);
+    if (vg.replace('.', '').length < 3 || vh.replace('.', '').length < 3) { alert('La categoría «' + g.dataset.cat + '» tiene una cuenta incompleta (mínimo 3 dígitos).'); return; }
+    map[g.dataset.cat] = { gasto: vg, acum: vh };
+  }
+  var e = cargarEmpresa(); e.cuentasContables = map; guardarEmpresa(e);
+  document.getElementById('asPanelCuentas').style.display = 'none';
+  generarAsientos();
+}
+function restablecerCuentasAsientos() {
+  var e = cargarEmpresa(); delete e.cuentasContables; guardarEmpresa(e);
+  document.getElementById('asPanelCuentas').style.display = 'none';
+  toggleCuentasAsientos(); generarAsientos();
+}
+
+// ── Salidas ──
+function imprimirAsientos() {
+  var r = _construirAsientos();
+  var doc = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Asientos de amortización · ' + _esc(r.per.label) + '</title>'
+    + '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;color:#0f172a;padding:16px;font-size:9.5pt;}'
+    + '.as-tab{width:100%;border-collapse:collapse;font-size:8.5pt;margin-bottom:12px;}'
+    + '.as-tab th{background:#b45309 !important;color:#fff !important;padding:5px 6px;border:1px solid #92400e;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
+    + '.as-tab td{padding:4px 6px;border:1px solid #e2e8f0;text-align:left;} .as-tab tr{page-break-inside:avoid;}'
+    + '.as-tab tr.as-cab td{background:#fef3c7 !important;font-weight:bold;color:#78350f;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
+    + '.as-tab tr.as-tot td{background:#fffbeb !important;font-weight:bold;color:#92400e;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
+    + '.num{text-align:right;white-space:nowrap;} .cta{font-family:Consolas,monospace;font-weight:bold;white-space:nowrap;}'
+    + '.footer{margin-top:10px;border-top:1px solid #fde68a;padding-top:5px;display:flex;justify-content:space-between;font-size:7.5pt;color:#64748b;}'
+    + '@page{size:A4;margin:12mm 10mm;}@media print{body{padding:0;}}</style></head><body>'
+    + _htmlAsientos(r)
+    + '<div class="footer"><span>Asientos de amortización · ' + _esc(r.per.label) + '</span><span>Registro de Bienes y Amortizaciones · Ver PJLR ' + APP_VERSION + '</span></div>'
+    + '<scr' + 'ipt>window.onload=function(){window.print();};<\/scr' + 'ipt></body></html>';
+  var w = window.open('', '_blank', 'width=1000,height=800');
+  if (!w) { alert('El navegador ha bloqueado la ventana de impresión. Permite las ventanas emergentes para esta página.'); return; }
+  w.document.open(); w.document.write(doc); w.document.close();
+}
+
+function exportarAsientosPDF() {
+  var r = _construirAsientos();
+  var emp = cargarEmpresa(), hoy = new Date().toLocaleDateString('es-ES');
+  var doc = new jsPDF();
+  var W = doc.internal.pageSize.getWidth();
+  var ambar = [180, 83, 9], ambarCl = [254, 243, 199], ambarTot = [255, 251, 235], marron = [120, 53, 15], gris = [219, 227, 238], muted = [100, 116, 139];
+  var alto = emp.nombre ? 32 : 22;
+  doc.setFillColor(ambar[0], ambar[1], ambar[2]); doc.rect(0, 0, W, alto, 'F');
+  doc.setTextColor(255, 255, 255);
+  var y = 10;
+  if (emp.nombre) { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(emp.nombre + (emp.cif ? '  |  ' + emp.cif : ''), 14, y); y += 7; }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('Asientos de amortización - ' + r.per.label, 14, y);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text('Generado: ' + hoy + ' · ' + r.asientos.length + ' asiento(s)', 14, y + 5);
+  doc.text('Total: ' + formatoMoneda(r.totalDebe), W - 14, y, { align: 'right' });
+  var body = [];
+  r.asientos.forEach(function (a) {
+    body.push([{ content: String(a.num), styles: { fillColor: ambarCl, fontStyle: 'bold', textColor: marron, halign: 'center' } },
+               { content: a.fecha, styles: { fillColor: ambarCl, fontStyle: 'bold', textColor: marron, halign: 'center' } },
+               { content: a.concepto, colSpan: 4, styles: { fillColor: ambarCl, font: 'helvetica', fontStyle: 'bold', textColor: marron } }]);
+    a.lineas.forEach(function (l) {
+      var esH = l.haber > 0;
+      body.push(['', '', (esH ? '    ' : '') + _fmtCuenta(l.cta), (esH ? 'a ' : '') + (l.desc || '') + (l.concepto !== a.concepto ? '\n' + l.concepto : ''), _imp(l.debe), _imp(l.haber)]);
+    });
+    body.push([{ content: 'Suma asiento ' + a.num, colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: ambarTot, textColor: marron } },
+               { content: formatoMoneda(a.debe), styles: { halign: 'right', fontStyle: 'bold', fillColor: ambarTot } },
+               { content: formatoMoneda(a.haber), styles: { halign: 'right', fontStyle: 'bold', fillColor: ambarTot } }]);
+  });
+  body.push([{ content: 'TOTAL DEL PERIODO', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [253, 230, 138], textColor: marron } },
+             { content: formatoMoneda(r.totalDebe), styles: { halign: 'right', fontStyle: 'bold', fillColor: [253, 230, 138] } },
+             { content: formatoMoneda(r.totalHaber), styles: { halign: 'right', fontStyle: 'bold', fillColor: [253, 230, 138] } }]);
+  if (!r.asientos.length) body = [[{ content: 'No hay cuotas de amortización con vencimiento en este periodo.', colSpan: 6, styles: { halign: 'center', textColor: muted } }]];
+  doc.autoTable({
+    startY: alto + 6, margin: { left: 10, right: 10, bottom: 18 },
+    head: [['Asiento', 'Fecha', 'Cuenta', 'Descripción / Concepto', 'Debe', 'Haber']],
+    body: body,
+    headStyles: { fillColor: ambar, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
+    styles: { fontSize: 7.8, cellPadding: 2.4, lineColor: gris, lineWidth: 0.2, textColor: [15, 23, 42] },
+    columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: 20 }, 2: { cellWidth: 24, font: 'courier', fontStyle: 'bold' }, 4: { cellWidth: 26, halign: 'right' }, 5: { cellWidth: 26, halign: 'right' } },
+    theme: 'grid'
+  });
+  var fy = doc.lastAutoTable.finalY + 6, H = doc.internal.pageSize.getHeight();
+  if (fy > H - 30) { doc.addPage(); fy = 16; }
+  doc.setFontSize(7); doc.setTextColor(muted[0], muted[1], muted[2]);
+  doc.text(doc.splitTextToSize('Se recogen las cuotas cuyo cierre, según el cuadro de cada bien, cae dentro del periodo. Cuentas según ' + CONFIG_PGC.vigencia, W - 20), 10, fy);
+  var tp = doc.internal.getNumberOfPages();
+  for (var pg = 1; pg <= tp; pg++) {
+    doc.setPage(pg);
+    doc.setDrawColor(gris[0], gris[1], gris[2]); doc.setLineWidth(0.3); doc.line(10, H - 14, W - 10, H - 14);
+    doc.setFontSize(7.5); doc.setTextColor(muted[0], muted[1], muted[2]);
+    doc.text('Asientos de amortización: ' + r.per.label + ' · Ver PJLR ' + APP_VERSION, 10, H - 8);
+    doc.text('Pág. ' + pg + ' / ' + tp, W - 10, H - 8, { align: 'right' });
+  }
+  doc.save('asientos_amortizacion_' + r.per.label.replace(/[^A-Za-z0-9]+/g, '_') + '_' + marcaTiempo() + '.pdf');
+}
+
+function exportarAsientosCSV() {
+  var r = _construirAsientos();
+  if (!r.asientos.length) { alert('No hay asientos en el periodo seleccionado.'); return; }
+  var n = function (x) { return x ? x.toFixed(2).replace('.', ',') : ''; };
+  var filas = ['Asiento;Fecha;Cuenta;Descripción cuenta;Concepto;Debe;Haber'];
+  r.asientos.forEach(function (a) {
+    a.lineas.forEach(function (l) { filas.push([a.num, a.fecha, _fmtCuenta(l.cta), escaparCSV(l.desc), escaparCSV(l.concepto), n(l.debe), n(l.haber)].join(';')); });
+  });
+  var blob = new Blob(['﻿' + filas.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  descargarArchivo(blob, 'asientos_amortizacion_' + r.per.label.replace(/[^A-Za-z0-9]+/g, '_') + '_' + marcaTiempo() + '.csv');
+}
+</script>
+
 <div id="ctxMenuBien" class="ctx-menu" role="menu" aria-hidden="true">
   <div class="ctx-head" id="ctxMenuTitulo"></div>
   <button type="button" data-acc="cuadro"><span class="ic">📊</span>Cuadro de amortización</button>

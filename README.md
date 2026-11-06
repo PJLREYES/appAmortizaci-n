@@ -2,7 +2,7 @@
 
 Registro de bienes y cuadros de amortización. Es una aplicación HTML de un solo archivo, multiempresa.
 
-Versión actual: **Ver PJLR 2026.33**
+Versión actual: **Ver PJLR 2026.34**
 
 ## Archivos
 
@@ -33,6 +33,7 @@ El desinstalador nunca borra datos. Más información en `instalador/LEEME.txt`.
 
 ## Historial reciente
 
+- **2026.34**: nuevo botón «📒 Asientos contables» en la pestaña Informe anual: asientos del Libro Diario de la cuota de amortización por mes, trimestre, semestre o año (68x a 28x según PGC). Agrupación por cierre, asiento único del periodo o por bien; desglose por bien; cuentas de 3-4, 8 o 10 dígitos (subcuenta con punto: «2817.1»); cuentas editables por categoría y empresa (⚙️ Cuentas); impresión, PDF y CSV.
 - **2026.33**: el botón «✕ Cerrar» solo genera copia si hay cambios desde la última (huella SHA-256 de los datos guardada en «Copias de seguridad/ultima_copia.json»); si no hay cambios, solo cierra.
 - **2026.32**: «Copias de seguridad» conserva solo las 10 copias más recientes (bienes_amortizaciones_….zip); al cerrar se borran las más antiguas.
 - **2026.31**: se elimina la copia automática del programa (`amortizaciones_programa.html`) y el botón «Actualizar programa en la carpeta»; las copias que quedaran se borran solas al conectar la carpeta.
